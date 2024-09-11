@@ -442,19 +442,33 @@ psutil_proc_pidtaskinfo_oneshot(PyObject *self, PyObject *args) {
     struct proc_taskinfo pti;
     uint64_t total_user;
     uint64_t total_system;
+    mach_port_t task = MACH_PORT_NULL;
+    struct task_vm_info vm_info;
+    mach_msg_type_number_t count = TASK_VM_INFO_COUNT;
 
     if (! PyArg_ParseTuple(args, _Py_PARSE_PID, &pid))
         return NULL;
     if (psutil_proc_pidinfo(pid, PROC_PIDTASKINFO, 0, &pti, sizeof(pti)) <= 0)
         return NULL;
+    if (psutil_task_for_pid(pid, &task) != 0)
+        return NULL;
+    
+    kern_return_t kr = task_info(task, TASK_VM_INFO_PURGEABLE, (task_info_t)&vm_info, &count);
+    if (kr != KERN_SUCCESS) {
+        PyErr_Format(PyExc_RuntimeError,
+                         "task_info(TASK_VM_INFO_PURGEABLE) syscall failed");
+        mach_port_deallocate(mach_task_self(), task);
+        return NULL;
+    }
 
     total_user = pti.pti_total_user * PSUTIL_MACH_TIMEBASE_INFO.numer;
     total_user /= PSUTIL_MACH_TIMEBASE_INFO.denom;
     total_system = pti.pti_total_system * PSUTIL_MACH_TIMEBASE_INFO.numer;
     total_system /= PSUTIL_MACH_TIMEBASE_INFO.denom;
 
+    mach_port_deallocate(mach_task_self(), task);
     return Py_BuildValue(
-        "(ddKKkkkk)",
+        "(ddKKkkkkKKK)",
         (float)total_user / 1000000000.0,     // (float) cpu user time
         (float)total_system / 1000000000.0,   // (float) cpu sys time
         // Note about memory: determining other mem stats on macOS is a mess:
@@ -470,7 +484,10 @@ psutil_proc_pidtaskinfo_oneshot(PyObject *self, PyObject *args) {
         // Unvoluntary value seems not to be available;
         // pti.pti_csw probably refers to the sum of the two;
         // getrusage() numbers seems to confirm this theory.
-        pti.pti_csw             // (uns long) voluntary ctx switches
+        pti.pti_csw,            // (uns long) voluntary ctx switches
+        vm_info.phys_footprint, // (uns long long) physical footprint
+        vm_info.compressed,     // (uns long long) compressed
+        vm_info.purgeable_volatile_resident // (uns long long) purgeable
     );
 }
 

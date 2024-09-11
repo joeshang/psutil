@@ -83,6 +83,9 @@ pidtaskinfo_map = dict(
     pageins=5,
     numthreads=6,
     volctxsw=7,
+    footprint=8,
+    compressed=9,
+    purgeable=10,
 )
 
 
@@ -99,7 +102,8 @@ svmem = namedtuple(
     'svmem', ['total', 'available', 'percent', 'used', 'free',
               'active', 'inactive', 'wired'])
 # psutil.Process.memory_info()
-pmem = namedtuple('pmem', ['rss', 'vms', 'pfaults', 'pageins'])
+pmem = namedtuple('pmem', ['rss', 'vms', 'pfaults', 'pageins',
+                           'footprint', 'compressed', 'purgeable'])
 # psutil.Process.memory_full_info()
 pfullmem = namedtuple('pfullmem', pmem._fields + ('uss', ))
 # fmt: on
@@ -453,6 +457,9 @@ class Process:
             rawtuple[pidtaskinfo_map['vms']],
             rawtuple[pidtaskinfo_map['pfaults']],
             rawtuple[pidtaskinfo_map['pageins']],
+            rawtuple[pidtaskinfo_map['footprint']],
+            rawtuple[pidtaskinfo_map['compressed']],
+            rawtuple[pidtaskinfo_map['purgeable']],
         )
 
     @wrap_exceptions
